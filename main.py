@@ -88,23 +88,50 @@ class Flow:
         return rsl
 
 
+def load_data(file):
+    flow = Flow()
+    bd = open(file, 'r')
+    data = bd.readlines()
+    for l in data:
+        s = l.split(' ')
+        img = s[5:]
+        if len(l) >= 5:
+            flow.add(Unit(int(s[0]), s[1], s[2], int(s[3]), int(s[4]), img))
+    bd.close()
+    return flow
+
+
+def save_data(file, flow):
+    bd = open(file, 'w')
+    lines = str()
+    for unit in flow.find_all():
+        s = f'{unit.get_id()} {unit.get_type()} {unit.get_name()} {unit.get_number()} {unit.get_status()}'
+        for img in unit.get_images():
+            s = s + ' ' + img
+        lines = lines + s + '\n'
+    bd.write(lines[0:-1])
+    bd.close()
+
+
 bot = telebot.TeleBot(config.token)
 upload = False
 new = False
-fl = Flow()
 id_upload = int()
+file = 'bd.txt'
+fl = load_data(file)
 
-fl.add(Unit(1, 'ecn', 'ВНН5-25-700/03-023', 190345610, 0,
-            ['AgACAgIAAxkBAAIB0GDYXrKc9D85pfAdp8rNvfWvPF_fAAJntTEbV1vASjokvvNorOVqAQADAgADbQADIAQ',
-             'AgACAgIAAxkBAAIB4GDYYT7pz3xj6-xhFEt1xTl1W9eiAAJrtTEbV1vASr1qHI4AAWC6WwEAAwIAA20AAyAE',
-             'AgACAgIAAxkBAAIB7WDYY3BWMUgwdLMPvvcMgc141MccAAJBtjEbQUHBSh56GLB05C2kAQADAgADbQADIAQ',
-             'AgACAgIAAxkBAAIBnmDYWP2wiT6iGvbxZF5Yv0BpFLZWAAIlszEb2pPBSvfZNQHX2R5QAQADAgADbQADIAQ'
-             ]))
-fl.add(Unit(2, 'ecn', 'ВНН5-25-800/03-023', 190345611, 0, list()))
-fl.add(Unit(5, 'ped', 'ПЭДН63-117-1100/071', 185245215, 0, list()))
-fl.add(Unit(5, 'ped', 'ПЭДН45-117-900/071', 200245151, 0, list()))
-fl.add(Unit(6, 'gz', 'ГЗНМ-92/030', 190254654, 0, list()))
-
+# fl = Flow()
+# fl.add(Unit(1, 'ecn', 'ВНН5-25-700/03-023', 190345610, 0,
+#             ['AgACAgIAAxkBAAIB0GDYXrKc9D85pfAdp8rNvfWvPF_fAAJntTEbV1vASjokvvNorOVqAQADAgADbQADIAQ',
+#              'AgACAgIAAxkBAAIB4GDYYT7pz3xj6-xhFEt1xTl1W9eiAAJrtTEbV1vASr1qHI4AAWC6WwEAAwIAA20AAyAE',
+#              'AgACAgIAAxkBAAIB7WDYY3BWMUgwdLMPvvcMgc141MccAAJBtjEbQUHBSh56GLB05C2kAQADAgADbQADIAQ',
+#              'AgACAgIAAxkBAAIBnmDYWP2wiT6iGvbxZF5Yv0BpFLZWAAIlszEb2pPBSvfZNQHX2R5QAQADAgADbQADIAQ'
+#              ]))
+# fl.add(Unit(2, 'ecn', 'ВНН5-25-800/03-023', 190345611, 0, list()))
+# fl.add(Unit(5, 'ped', 'ПЭДН63-117-1100/071', 185245215, 0, list()))
+# fl.add(Unit(5, 'ped', 'ПЭДН45-117-900/071', 200245151, 0, list()))
+# fl.add(Unit(6, 'gz', 'ГЗНМ-92/030', 190254654, 0, list()))
+# save_data(file, fl)
 
 @bot.message_handler(commands=['start'])
 def start(message):
@@ -120,6 +147,7 @@ def answer(call):
     global fl
     global id_upload
     global new
+    global file
     data = call.data.split('.')
     # Главное Меню
     if call.data == 'main_menu':
@@ -180,6 +208,7 @@ def answer(call):
         upload = False
         new = False
         rsl = fl.delete(int(data[1]))
+        save_data('bd.txt', fl)
         gs_main_key = types.InlineKeyboardMarkup(row_width=1)
         butt_back = types.InlineKeyboardButton('<- Назад',
                                                callback_data='list_dell')
@@ -582,6 +611,7 @@ def get_text_messages(message):
     global upload
     global new
     global fl
+    global file
     upload = False
 
     # Добавление нового узла
@@ -602,13 +632,13 @@ def get_text_messages(message):
         else:
             bot.send_message(chat_id=message.chat.id,
                              text='Неудалось добавить узел')
-
     print('Пользователь ' + message.from_user.first_name + ' сообщение ' + message.text)
     if message.text == 'ID':
         bot.send_message(message.from_user.id, f'Your ID: {message.from_user.id}')
     elif message.text == 'Name':
         bot.send_message(message.from_user.id, f'Your ID: {message.from_user.first_name}')
     elif message.text == 'Главное меню':
+        save_data('bd.txt', fl)
         main_key = types.InlineKeyboardMarkup()
         butt_ecn = types.InlineKeyboardButton('ЭЦН', callback_data='list_ecn')
         butt_ped = types.InlineKeyboardButton('ПЭД', callback_data='list_ped')
