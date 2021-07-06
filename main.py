@@ -13,7 +13,7 @@ def load_data(file_data, file_users):
         s = l.split(' ')
         img = s[5:]
         if len(l) >= 5:
-            flow.add_unit(Unit(int(s[0]), s[1], s[2], int(s[3]), int(s[4]), img))
+            flow.add_unit(Unit(int(s[0]), s[1], s[2], int(s[3]), float(s[4]), img))
     bd.close()
     f = open(file_users, 'r')
     line = f.readlines()
@@ -39,8 +39,6 @@ def save_data(file, flow):
 STATUS_LIST = {'ecn': {0: 'комплектация',
                        1: 'скомплектован',
                        2: 'сборка',
-                       2.1: 'Проверка теплового зазора',
-                       2.2: 'Проверка вылетов вала',
                        3: 'собран',
                        4: 'испытание',
                        5: 'испытан'},
@@ -97,6 +95,7 @@ def answer(call):
         pass
     data = call.data.split('.')
     print(data)
+
     # Главное Меню
     if call.data == 'main':
         upload = False
@@ -117,58 +116,143 @@ def answer(call):
         new = False
         key = types.InlineKeyboardMarkup(row_width=1)
         for unit in fl.find_all():
-            key.add(
-                types.InlineKeyboardButton(
-                    f'{unit.get_name()} '
-                    f'{unit.get_number()} '
-                    f'{STATUS_LIST[unit.get_type()][int(unit.get_status())]}',
-                    callback_data=f'oper_change.{unit.get_id()}')
-            )
-        butt_dell = types.InlineKeyboardButton('Убрать со сбоки узел',
+            if int(unit.get_status()) in STATUS_LIST[unit.get_type()] \
+                    and STATUS_LIST[unit.get_type()][int(unit.get_status())] != 'испытан':
+                key.add(
+                    types.InlineKeyboardButton(
+                        f'{unit.get_name()} '
+                        f'{unit.get_number()} '
+                        f'{STATUS_LIST[unit.get_type()][int(unit.get_status())]}',
+                        callback_data=f'oper_change.{unit.get_id()}')
+                )
+        butt_add = types.InlineKeyboardButton('Новая сборка',
+                                              callback_data='new')
+        butt_dell = types.InlineKeyboardButton('Убрать узел со сбоки',
                                                callback_data='list_dell')
         butt_back = types.InlineKeyboardButton('<- Назад',
                                                callback_data='main')
-        key.add(butt_dell, butt_back)
+        key.add(butt_add, butt_dell, butt_back)
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
                               text='Выберите узел:',
                               reply_markup=key)
-
     elif data[0] == 'oper_change':
         upload = False
         new = False
         key = types.InlineKeyboardMarkup(row_width=1)
         unit = fl.find_by_id(int(data[1]))
-        if int(unit.get_status()) == 2:
-            pass
+        status = unit.get_status()
+        if int(status) == 2:
+            if status == 2:
+                unit.set_status(2.1)
+            if unit.get_status() in CHANGE_LIST[unit.get_type()]:
+                key.add(types.InlineKeyboardButton(
+                    f'{CHANGE_LIST[unit.get_type()][unit.get_status()]}',
+                    callback_data=f'change.{unit.get_id()}'))
+            else:
+                key.add(types.InlineKeyboardButton(
+                    f'Завершить сборку',
+                    callback_data=f'change.{unit.get_id()}'))
         else:
             key.add(types.InlineKeyboardButton(
                 f'{CHANGE_LIST[unit.get_type()][unit.get_status()]}',
                 callback_data=f'change.{unit.get_id()}'))
         butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='main')
+                                               callback_data='oper_list')
         key.add(butt_back)
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
                               text=f'{unit}',
                               reply_markup=key)
-
     elif data[0] == 'change':
         upload = False
         new = False
         key = types.InlineKeyboardMarkup(row_width=1)
         unit = fl.find_by_id(int(data[1]))
-        if int(unit.get_status()) == 2:
-            pass
+        if int(unit.get_status()) == 2 and unit.get_status() in CHANGE_LIST[unit.get_type()]:
+            key.add(types.InlineKeyboardButton(
+                f'Загрузить фотоотчет',
+                callback_data=f'upload.{unit.get_id()}'))
+            key.add(types.InlineKeyboardButton(
+                f'Завершить операцию',
+                callback_data=f'end.{unit.get_id()}'))
         else:
-            unit.set_status(unit.get_status() + 1)
+            unit.set_status(int(unit.get_status() + 1))
         butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data=f'oper_change.{unit.get_id()}')
+                                               callback_data=f'oper_list.{unit.get_id()}')
         key.add(butt_back)
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
                               text='Статус изменен',
                               reply_markup=key)
+    elif data[0] == 'upload':
+        upload = True
+        new = False
+        id_upload = int(data[1])
+        key = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        butt_start = types.KeyboardButton('Главное меню')
+        key.add(butt_start)
+        bot.send_message(call.message.chat.id,
+                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
+                         reply_markup=key)
+    elif data[0] == 'end':
+        upload = False
+        new = False
+        unit = fl.find_by_id(int(data[1]))
+        unit.set_status(unit.get_status() + 0.1)
+        key = types.InlineKeyboardMarkup(row_width=1)
+        butt_back = types.InlineKeyboardButton('<- Назад',
+                                               callback_data=f'oper_list.{unit.get_id()}')
+        key.add(butt_back)
+        bot.edit_message_text(chat_id=call.message.chat.id,
+                              message_id=call.message.message_id,
+                              text='Статус изменен',
+                              reply_markup=key)
+    # Новая сборка
+    elif call.data == 'new':
+        new = True
+        upload = False
+        bot.send_message(chat_id=call.message.chat.id,
+                         text='Введите наименование и номер узла без знака "№", например ВНН5-25-700/03-043 190260321 После ввода вернитесь в Главное меню')
+
+
+    # Список для удаления
+    elif call.data == 'list_dell':
+        upload = False
+        new = False
+        keyboard = types.InlineKeyboardMarkup(row_width=1)
+        for unit in fl.find_all():
+            keyboard.add(
+                types.InlineKeyboardButton(f'{unit.get_name()} {unit.get_number()}',
+                                           callback_data=f'del.{unit.get_id()}')
+            )
+        butt_back = types.InlineKeyboardButton('<- Назад',
+                                               callback_data='main_menu')
+        keyboard.add(butt_back)
+        bot.edit_message_text(chat_id=call.message.chat.id,
+                              message_id=call.message.message_id,
+                              text='Вуберите узел для удаления:',
+                              reply_markup=keyboard)
+    # Удаление узла
+    elif data[0] == 'del':
+        upload = False
+        new = False
+        rsl = fl.delete(int(data[1]))
+        save_data('bd.txt', fl)
+        gs_main_key = types.InlineKeyboardMarkup(row_width=1)
+        butt_back = types.InlineKeyboardButton('<- Назад',
+                                               callback_data='list_dell')
+        gs_main_key.add(butt_back)
+        if rsl:
+            bot.edit_message_text(chat_id=call.message.chat.id,
+                                  message_id=call.message.message_id,
+                                  text='Узел удален',
+                                  reply_markup=gs_main_key)
+        else:
+            bot.edit_message_text(chat_id=call.message.chat.id,
+                                  message_id=call.message.message_id,
+                                  text='Не удалось удалить узел',
+                                  reply_markup=gs_main_key)
 
     # Статус ремонта
     elif call.data == 'status_all':
@@ -191,45 +275,6 @@ def answer(call):
                               text='Выберите узел:',
                               reply_markup=keyboard)
 
-    # Список для удаления
-    elif call.data == 'list_dell':
-        upload = False
-        new = False
-        keyboard = types.InlineKeyboardMarkup(row_width=1)
-        for unit in fl.find_all():
-            keyboard.add(
-                types.InlineKeyboardButton(f'{unit.get_name()} {unit.get_number()}',
-                                           callback_data=f'del.{unit.get_id()}')
-            )
-        butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='main_menu')
-        keyboard.add(butt_back)
-        bot.edit_message_text(chat_id=call.message.chat.id,
-                              message_id=call.message.message_id,
-                              text='Вуберите узел для удаления:',
-                              reply_markup=keyboard)
-
-    # Удаление узла
-    elif data[0] == 'del':
-        upload = False
-        new = False
-        rsl = fl.delete(int(data[1]))
-        save_data('bd.txt', fl)
-        gs_main_key = types.InlineKeyboardMarkup(row_width=1)
-        butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='list_dell')
-        gs_main_key.add(butt_back)
-        if rsl:
-            bot.edit_message_text(chat_id=call.message.chat.id,
-                                  message_id=call.message.message_id,
-                                  text='Узел удален',
-                                  reply_markup=gs_main_key)
-        else:
-            bot.edit_message_text(chat_id=call.message.chat.id,
-                                  message_id=call.message.message_id,
-                                  text='Не удалось удалить узел',
-                                  reply_markup=gs_main_key)
-
     # Выгрузка фотографий узла
     elif data[0] == 'show':
         upload = False
@@ -240,376 +285,12 @@ def answer(call):
             bot.send_photo(call.message.chat.id, file)
         keyboard = types.InlineKeyboardMarkup(row_width=1)
         butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='list_all')
+                                               callback_data='status_all')
         keyboard.add(butt_back)
         bot.send_message(chat_id=call.message.chat.id,
                          text=
                          f'Загружены фото контроля сбоки {unit}',
                          reply_markup=keyboard)
-
-    # Список ЭЦН на сборке
-    elif call.data == 'list_ecn':
-        upload = False
-        new = False
-        keyboard = types.InlineKeyboardMarkup(row_width=1)
-        for unit in fl.find_all():
-            if unit.get_type() == 'ecn':
-                keyboard.add(
-                    types.InlineKeyboardButton(f'{unit.get_name()} {unit.get_number()}',
-                                               callback_data=f'main_ecn.{unit.get_id()}')
-                )
-        butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='main_menu')
-        butt_new = types.InlineKeyboardButton('Новая сборка',
-                                              callback_data='new')
-        keyboard.add(butt_new, butt_back)
-        bot.edit_message_text(chat_id=call.message.chat.id,
-                              message_id=call.message.message_id,
-                              text='Выберите секцию:',
-                              reply_markup=keyboard)
-    # Верхнее меню ЭЦН
-    elif data[0] == 'main_ecn':
-        new = False
-        upload = False
-        ecn_main_key = types.InlineKeyboardMarkup(row_width=1)
-        butt_1 = types.InlineKeyboardButton('1. Визуальный контроль состояния деталей',
-                                            callback_data=f'ecn_sub1.{data[1]}')
-        butt_2 = types.InlineKeyboardButton('2. Контроль состояния вала',
-                                            callback_data=f'ecn_sub2.{data[1]}')
-        butt_3 = types.InlineKeyboardButton('3. Контроль момента проворачивания вала',
-                                            callback_data=f'ecn_sub3.{data[1]}')
-        butt_4 = types.InlineKeyboardButton('4. Контроль вылетов вала',
-                                            callback_data=f'ecn_sub4.{data[1]}')
-        butt_5 = types.InlineKeyboardButton('5. Контроль радиального и торцевого биений',
-                                            callback_data=f'ecn_sub5.{data[1]}')
-        butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='list_ecn')
-        ecn_main_key.add(butt_1, butt_2, butt_3, butt_4, butt_5, butt_back)
-        bot.edit_message_text(chat_id=call.message.chat.id,
-                              message_id=call.message.message_id,
-                              text=f'Контроль {fl.find_by_id(int(data[1]))}',
-                              reply_markup=ecn_main_key)
-    # Меню ЭЦН 1. Визуальный контроль состояния деталей
-    elif data[0] == 'ecn_sub1':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ЭЦН 2. Контроль состояния вала
-    elif data[0] == 'ecn_sub2':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ЭЦН 3. Контроль момента проворачивания вала
-    elif data[0] == 'ecn_sub3':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ЭЦН 4. Контроль вылетов вала
-    elif data[0] == 'ecn_sub4':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ЭЦН 5. Контроль радиального и торцевого биений
-    elif data[0] == 'ecn_sub5':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-
-    # Список ПЭД на сборке
-    elif call.data == 'list_ped':
-        upload = False
-        new = False
-        keyboard = types.InlineKeyboardMarkup(row_width=1)
-        for unit in fl.find_all():
-            if unit.get_type() == 'ped':
-                keyboard.add(
-                    types.InlineKeyboardButton(f'{unit.get_name()} {unit.get_number()}',
-                                               callback_data=f'main_ped.{unit.get_id()}')
-                )
-        butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='main_menu')
-        butt_new = types.InlineKeyboardButton('Новая сборка',
-                                              callback_data='new')
-        keyboard.add(butt_new, butt_back)
-        bot.edit_message_text(chat_id=call.message.chat.id,
-                              message_id=call.message.message_id,
-                              text='Выберите секцию:',
-                              reply_markup=keyboard)
-    # Верхнее меню ПЭД
-    elif data[0] == 'main_ped':
-        upload = False
-        new = False
-        ped_main_key = types.InlineKeyboardMarkup(row_width=1)
-        butt_1 = types.InlineKeyboardButton('1. Контроль качества мойки и правки вала',
-                                            callback_data=f'ped_sub1.{data[1]}')
-        butt_2 = types.InlineKeyboardButton('2. Проверка наружней поверхности статора',
-                                            callback_data=f'ped_sub2.{data[1]}')
-        butt_3 = types.InlineKeyboardButton('3. Контроль момента проворачивания вала',
-                                            callback_data=f'ped_sub3.{data[1]}')
-        butt_4 = types.InlineKeyboardButton('4. Проверка теплового зазора',
-                                            callback_data=f'ped_sub4.{data[1]}')
-        butt_5 = types.InlineKeyboardButton('5. Контроль состояния нулевого провода',
-                                            callback_data=f'ped_sub5.{data[1]}')
-        butt_6 = types.InlineKeyboardButton('6. Фактическое сопротивление изоляции',
-                                            callback_data=f'ped_sub6.{data[1]}')
-        butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='list_ped')
-        ped_main_key.add(butt_1, butt_2, butt_3, butt_4, butt_5, butt_6, butt_back)
-        bot.edit_message_text(chat_id=call.message.chat.id,
-                              message_id=call.message.message_id,
-                              text=f'Контроль {fl.find_by_id(int(data[1]))}',
-                              reply_markup=ped_main_key)
-    # Меню ПЭД 1. Контроль качества мойки и правки вала
-    elif data[0] == 'ped_sub1':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ПЭД 2. Проверка наружней поверхности статора
-    elif data[0] == 'ped_sub2':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ПЭД 3. Контроль момента проворачивания вала
-    elif data[0] == 'ped_sub3':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ПЭД 4. Проверка теплового зазора
-    elif data[0] == 'ped_sub4':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ПЭД 5. Контроль состояния нулевого провода
-    elif data[0] == 'ped_sub5':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ПЭД 6. Фактическое сопротивление изоляции
-    elif data[0] == 'ped_sub6':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-
-    # Список ГЗ на сборке
-    elif call.data == 'list_gz':
-        upload = False
-        new = False
-        keyboard = types.InlineKeyboardMarkup(row_width=1)
-        for unit in fl.find_all():
-            if unit.get_type() == 'gz':
-                keyboard.add(
-                    types.InlineKeyboardButton(f'{unit.get_name()} {unit.get_number()}',
-                                               callback_data=f'main_gz.{unit.get_id()}')
-                )
-        butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='main_menu')
-        butt_new = types.InlineKeyboardButton('Новая сборка',
-                                              callback_data='new')
-        keyboard.add(butt_new, butt_back)
-        bot.edit_message_text(chat_id=call.message.chat.id,
-                              message_id=call.message.message_id,
-                              text='Выберите секцию:',
-                              reply_markup=keyboard)
-    # Верхнее меню ГЗ
-    elif data[0] == 'main_gz':
-        upload = False
-        new = False
-        gz_main_key = types.InlineKeyboardMarkup(row_width=1)
-        butt_1 = types.InlineKeyboardButton('1. Контроль вала и теплового зазора',
-                                            callback_data=f'gz_sub1.{data[1]}')
-        butt_2 = types.InlineKeyboardButton('2. Опресовка торцевого уплотнения',
-                                            callback_data=f'gz_sub2.{data[1]}')
-        butt_3 = types.InlineKeyboardButton('3. Опресовка клапанов',
-                                            callback_data=f'gz_sub3.{data[1]}')
-        butt_4 = types.InlineKeyboardButton('4. Контроль момента вращения вала',
-                                            callback_data=f'gz_sub4.{data[1]}')
-        butt_5 = types.InlineKeyboardButton('5. Контроль заглубления и вылетов',
-                                            callback_data=f'gz_sub5.{data[1]}')
-        butt_6 = types.InlineKeyboardButton('6. Контроль радиального и торцевого биений',
-                                            callback_data=f'gz_sub6.{data[1]}')
-        butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='list_gz')
-        gz_main_key.add(butt_1, butt_2, butt_3, butt_4, butt_5, butt_6, butt_back)
-        bot.edit_message_text(chat_id=call.message.chat.id,
-                              message_id=call.message.message_id,
-                              text=f'Контроль {fl.find_by_id(int(data[1]))}',
-                              reply_markup=gz_main_key)
-    # Меню ГЗ 1. Контроль вала и теплового зазора
-    elif data[0] == 'gz_sub1':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ГЗ 2. Опресовка торцевого уплотнения
-    elif data[0] == 'gz_sub2':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ГЗ 3. Опресовка клапанов
-    elif data[0] == 'gz_sub3':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ГЗ 4. Контроль момента вращения вала
-    elif data[0] == 'gz_sub4':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ГЗ 5. Контроль заглубления и вылетов
-    elif data[0] == 'gz_sub5':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-    # Меню ГЗ 6. Контроль радиального и торцевого биений
-    elif data[0] == 'gz_sub6':
-        upload = True
-        new = False
-        id_upload = int(data[1])
-        ecn_sub1_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
-        button_start = types.KeyboardButton('Главное меню')
-        ecn_sub1_key.add(button_start)
-        bot.send_message(call.message.chat.id,
-                         'Загрузите фото проверки. После завершения вернитесь в Главное меню',
-                         reply_markup=ecn_sub1_key)
-
-    # Верхнее меню Приемного устройства
-    elif call.data == 'main_gs':
-        upload = False
-        new = False
-        gs_main_key = types.InlineKeyboardMarkup(row_width=1)
-        butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='main_menu')
-        gs_main_key.add(butt_back)
-        bot.edit_message_text(chat_id=call.message.chat.id,
-                              message_id=call.message.message_id,
-                              text='Раздел в разработке',
-                              reply_markup=gs_main_key)
-    # Верхнее меню Кабельных линий
-    elif call.data == 'main_kl':
-        upload = False
-        new = False
-        kl_main_key = types.InlineKeyboardMarkup(row_width=1)
-        butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='main_menu')
-        kl_main_key.add(butt_back)
-        bot.edit_message_text(chat_id=call.message.chat.id,
-                              message_id=call.message.message_id,
-                              text='Раздел в разработке',
-                              reply_markup=kl_main_key)
-    # Верхнее меню Доп оборудования
-    elif call.data == 'main_dop':
-        upload = False
-        new = False
-        dop_main_key = types.InlineKeyboardMarkup(row_width=1)
-        butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='main_menu')
-        dop_main_key.add(butt_back)
-        bot.edit_message_text(chat_id=call.message.chat.id,
-                              message_id=call.message.message_id,
-                              text='Раздел в разработке',
-                              reply_markup=dop_main_key)
-
-    # Новая сборка
-    elif call.data == 'new':
-        new = True
-        upload = False
-        bot.send_message(chat_id=call.message.chat.id,
-                         text='Введите наименование и номер узла без знака "№", например ВНН5-25-700/03-043 190260321 После ввода вернитесь в Главное меню')
 
 
 @bot.message_handler(content_types=['text'])
