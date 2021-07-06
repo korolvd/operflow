@@ -36,6 +36,7 @@ def save_data(file, flow):
     bd.close()
 
 
+# Инициализация
 bot = telebot.TeleBot(config.TOKEN)
 upload = False
 new = False
@@ -45,19 +46,7 @@ STATUS_LIST = config.STATUS_LIST
 CHANGE_LIST = config.CHANGE_LIST
 
 
-# fl = Flow()
-# fl.add_unit(Unit(1, 'ecn', 'ВНН5-25-700/03-023', 190345610, 0,
-#             ['AgACAgIAAxkBAAIB0GDYXrKc9D85pfAdp8rNvfWvPF_fAAJntTEbV1vASjokvvNorOVqAQADAgADbQADIAQ',
-#              'AgACAgIAAxkBAAIB4GDYYT7pz3xj6-xhFEt1xTl1W9eiAAJrtTEbV1vASr1qHI4AAWC6WwEAAwIAA20AAyAE',
-#              'AgACAgIAAxkBAAIB7WDYY3BWMUgwdLMPvvcMgc141MccAAJBtjEbQUHBSh56GLB05C2kAQADAgADbQADIAQ',
-#              'AgACAgIAAxkBAAIBnmDYWP2wiT6iGvbxZF5Yv0BpFLZWAAIlszEb2pPBSvfZNQHX2R5QAQADAgADbQADIAQ'
-#              ]))
-# fl.add_unit(Unit(2, 'ecn', 'ВНН5-25-800/03-023', 190345611, 0, list()))
-# fl.add_unit(Unit(5, 'ped', 'ПЭДН63-117-1100/071', 185245215, 0, list()))
-# fl.add_unit(Unit(5, 'ped', 'ПЭДН45-117-900/071', 200245151, 0, list()))
-# fl.add_unit(Unit(6, 'gz', 'ГЗНМ-92/030', 190254654, 0, list()))
-# save_data(file, fl)
-
+# Обработка входяших команд и сообщений
 @bot.message_handler(commands=['start'])
 def start(message):
     start_key = types.ReplyKeyboardMarkup(resize_keyboard=True)
@@ -163,6 +152,7 @@ def answer(call):
                 callback_data=f'end.{unit.get_id()}'))
         else:
             unit.set_status(int(unit.get_status() + 1))
+            save_data('bd.txt', fl)
         butt_back = types.InlineKeyboardButton('<- Назад',
                                                callback_data=f'oper_list.{unit.get_id()}')
         key.add(butt_back)
@@ -185,6 +175,7 @@ def answer(call):
         new = False
         unit = fl.find_by_id(int(data[1]))
         unit.set_status(unit.get_status() + 0.1)
+        save_data('bd.txt', fl)
         key = types.InlineKeyboardMarkup(row_width=1)
         butt_back = types.InlineKeyboardButton('<- Назад',
                                                callback_data=f'oper_list.{unit.get_id()}')
@@ -199,7 +190,6 @@ def answer(call):
         upload = False
         bot.send_message(chat_id=call.message.chat.id,
                          text='Введите наименование и номер узла без знака "№", например ВНН5-25-700/03-043 190260321 После ввода вернитесь в Главное меню')
-
 
     # Список для удаления
     elif call.data == 'list_dell':
@@ -304,6 +294,7 @@ def get_text_messages(message):
         else:
             bot.send_message(chat_id=message.chat.id,
                              text='Неудалось добавить узел')
+
     print('Пользователь ' + message.from_user.first_name + ' сообщение ' + message.text)
     if message.text == 'ID':
         bot.send_message(message.from_user.id, f'Your ID: {message.from_user.id}')
@@ -339,5 +330,6 @@ def handle_docs_document(message):
         fl.find_by_id(id_upload).add_image(message.photo[1].file_id)
 
 
+# Прослушивание входищих данных
 if __name__ == '__main__':
     bot.polling(none_stop=True)
