@@ -202,7 +202,7 @@ def answer(call):
                                            callback_data=f'del.{unit.get_id()}')
             )
         butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data='main')
+                                               callback_data='oper_list')
         keyboard.add(butt_back)
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
