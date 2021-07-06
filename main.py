@@ -36,28 +36,13 @@ def save_data(file, flow):
     bd.close()
 
 
-STATUS_LIST = {'ecn': {0: 'комплектация',
-                       1: 'скомплектован',
-                       2: 'сборка',
-                       3: 'собран',
-                       4: 'испытание',
-                       5: 'испытан'},
-               'ped': {1: 'Комплектация',
-                       2: 'Сборка',
-                       3: 'Испытание'}}
-CHANGE_LIST = {'ecn': {0: 'Завершить компектацию',
-                       1: 'Начать сборку',
-                       2: 'сборка',
-                       2.1: 'Проверка теплового зазора',
-                       2.2: 'Проверка вылетов вала',
-                       3: 'Начать испытание',
-                       4: 'Завершить испытание',
-                       5: 'испытан'}}
-bot = telebot.TeleBot(config.token)
+bot = telebot.TeleBot(config.TOKEN)
 upload = False
 new = False
 id_upload = int()
 fl = load_data('bd.txt', 'users.txt')
+STATUS_LIST = config.STATUS_LIST
+CHANGE_LIST = config.CHANGE_LIST
 
 
 # fl = Flow()
