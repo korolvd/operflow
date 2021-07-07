@@ -3,6 +3,7 @@ import config
 import telebot
 from telebot import types
 import os
+import datetime as dt
 
 
 def load_data(file_data, file_users):
@@ -11,9 +12,9 @@ def load_data(file_data, file_users):
     data = bd.readlines()
     for l in data:
         s = l.split(' ')
-        img = s[5:]
+        img = s[8:]
         if len(l) >= 5:
-            flow.add_unit(Unit(int(s[0]), s[1], s[2], int(s[3]), float(s[4]), img))
+            flow.add_unit(Unit(int(s[0]), s[1], s[2], int(s[3]), float(s[4]), s[5], s[6], s[7], img))
     bd.close()
     f = open(file_users, 'r')
     line = f.readlines()
@@ -28,7 +29,14 @@ def save_data(file, flow):
     bd = open(file, 'w')
     lines = str()
     for unit in flow.find_all():
-        s = f'{unit.get_id()} {unit.get_type()} {unit.get_name()} {unit.get_number()} {unit.get_status()}'
+        s = f'{unit.get_id()} ' \
+            f'{unit.get_type()} ' \
+            f'{unit.get_name()} ' \
+            f'{unit.get_number()} ' \
+            f'{unit.get_status()} ' \
+            f'{unit.get_date_collect()} ' \
+            f'{unit.get_date_assembly()} ' \
+            f'{unit.get_date_test()}'
         for img in unit.get_images():
             s = s + ' ' + img
         lines = lines + s + '\n'
@@ -41,7 +49,7 @@ bot = telebot.TeleBot(config.TOKEN)
 upload = False
 new = False
 id_upload = int()
-fl = load_data('bd.txt', 'users.txt')
+fl = load_data('bd_flow.txt', 'bd_users.txt')
 STATUS_LIST = config.STATUS_LIST
 CHANGE_LIST = config.CHANGE_LIST
 
@@ -64,11 +72,10 @@ def answer(call):
     global file
     global STATUS_LIST
     global CHANGE_LIST
-    # print(call.from_user.first_name + ' ' + str(call.from_user.id))
     if fl.find_user(call.from_user.id) is not None:
         pass
     data = call.data.split('.')
-    print(data)
+    print(call.from_user.first_name + ' ' + str(call.from_user.id) + ' ' + data[0])
 
     # Главное Меню
     if call.data == 'main':
@@ -115,22 +122,21 @@ def answer(call):
         new = False
         key = types.InlineKeyboardMarkup(row_width=1)
         unit = fl.find_by_id(int(data[1]))
-        status = unit.get_status()
-        if int(status) == 2:
-            if status == 2:
-                unit.set_status(2.1)
-            if unit.get_status() in CHANGE_LIST[unit.get_type()]:
-                key.add(types.InlineKeyboardButton(
-                    f'{CHANGE_LIST[unit.get_type()][unit.get_status()]}',
-                    callback_data=f'change.{unit.get_id()}'))
-            else:
-                key.add(types.InlineKeyboardButton(
-                    f'Завершить сборку',
-                    callback_data=f'change.{unit.get_id()}'))
+        if int(unit.get_status()) % 2 == 0:
+            for status in CHANGE_LIST[unit.get_type()]:
+                if int(unit.get_status()) == int(status):
+                    if round(status + 0.01, 2) in CHANGE_LIST[unit.get_type()]:
+                        key.add(types.InlineKeyboardButton(
+                            f'{CHANGE_LIST[unit.get_type()][status]}',
+                            callback_data=f'upload.{unit.get_id()}'))
+                    else:
+                        key.add(types.InlineKeyboardButton(
+                            f'{CHANGE_LIST[unit.get_type()][status]}',
+                            callback_data=f'end.{unit.get_id()}'))
         else:
             key.add(types.InlineKeyboardButton(
                 f'{CHANGE_LIST[unit.get_type()][unit.get_status()]}',
-                callback_data=f'change.{unit.get_id()}'))
+                callback_data=f'end.{unit.get_id()}'))
         butt_back = types.InlineKeyboardButton('<- Назад',
                                                callback_data='oper_list')
         key.add(butt_back)
@@ -138,23 +144,23 @@ def answer(call):
                               message_id=call.message.message_id,
                               text=f'{unit}',
                               reply_markup=key)
-    elif data[0] == 'change':
+    elif data[0] == 'end':
         upload = False
         new = False
-        key = types.InlineKeyboardMarkup(row_width=1)
+        current_date = dt.datetime.now()
         unit = fl.find_by_id(int(data[1]))
-        if int(unit.get_status()) == 2 and unit.get_status() in CHANGE_LIST[unit.get_type()]:
-            key.add(types.InlineKeyboardButton(
-                f'Загрузить фотоотчет',
-                callback_data=f'upload.{unit.get_id()}'))
-            key.add(types.InlineKeyboardButton(
-                f'Завершить операцию',
-                callback_data=f'end.{unit.get_id()}'))
-        else:
+        if STATUS_LIST[unit.get_type()][int(unit.get_status())] != 'испытан':
+            if unit.get_status() == 0:
+                unit.set_date_collect(current_date.strftime('%d-%m-%y-%H-%M'))
+            elif unit.get_status() == 2:
+                unit.set_date_assembly(current_date.strftime('%d-%m-%y-%H-%M'))
+            elif unit.get_status() == 4:
+                unit.set_date_test(current_date.strftime('%d-%m-%y-%H-%M'))
             unit.set_status(int(unit.get_status() + 1))
-            save_data('bd.txt', fl)
+            save_data('bd_flow.txt', fl)
+        key = types.InlineKeyboardMarkup(row_width=1)
         butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data=f'oper_list.{unit.get_id()}')
+                                               callback_data=f'oper_change.{unit.get_id()}')
         key.add(butt_back)
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
@@ -170,20 +176,7 @@ def answer(call):
         bot.send_message(call.message.chat.id,
                          'Загрузите фото проверки. После завершения вернитесь в Главное меню',
                          reply_markup=key)
-    elif data[0] == 'end':
-        upload = False
-        new = False
-        unit = fl.find_by_id(int(data[1]))
-        unit.set_status(unit.get_status() + 0.1)
-        save_data('bd.txt', fl)
-        key = types.InlineKeyboardMarkup(row_width=1)
-        butt_back = types.InlineKeyboardButton('<- Назад',
-                                               callback_data=f'oper_list.{unit.get_id()}')
-        key.add(butt_back)
-        bot.edit_message_text(chat_id=call.message.chat.id,
-                              message_id=call.message.message_id,
-                              text='Статус изменен',
-                              reply_markup=key)
+
     # Новая сборка
     elif call.data == 'new':
         new = True
@@ -208,12 +201,13 @@ def answer(call):
                               message_id=call.message.message_id,
                               text='Вуберите узел для удаления:',
                               reply_markup=keyboard)
+
     # Удаление узла
     elif data[0] == 'del':
         upload = False
         new = False
         rsl = fl.delete(int(data[1]))
-        save_data('bd.txt', fl)
+        save_data('bd_flow.txt', fl)
         gs_main_key = types.InlineKeyboardMarkup(row_width=1)
         butt_back = types.InlineKeyboardButton('<- Назад',
                                                callback_data='list_dell')
@@ -229,7 +223,7 @@ def answer(call):
                                   text='Не удалось удалить узел',
                                   reply_markup=gs_main_key)
 
-    # Статус ремонта
+    # Статус ремонта. Список узлов
     elif call.data == 'status_all':
         upload = False
         new = False
@@ -240,7 +234,7 @@ def answer(call):
                     f'{unit.get_name()} '
                     f'{unit.get_number()} '
                     f'{STATUS_LIST[unit.get_type()][int(unit.get_status())]}',
-                    callback_data=f'show.{unit.get_id()}')
+                    callback_data=f'status_unit.{unit.get_id()}')
             )
         butt_back = types.InlineKeyboardButton('<- Назад',
                                                callback_data='main')
@@ -248,6 +242,38 @@ def answer(call):
         bot.edit_message_text(chat_id=call.message.chat.id,
                               message_id=call.message.message_id,
                               text='Выберите узел:',
+                              reply_markup=keyboard)
+
+    # Статус ремонта узла
+    elif data[0] == 'status_unit':
+        upload = False
+        new = False
+        unit = fl.find_by_id(int(data[1]))
+        keyboard = types.InlineKeyboardMarkup(row_width=1)
+        butt_show = types.InlineKeyboardButton('Фотоотчет',
+                                               callback_data=f'show.{unit.get_id()}')
+        butt_back = types.InlineKeyboardButton('<- Назад',
+                                               callback_data='status_all')
+        keyboard.add(butt_show, butt_back)
+        status = f'{unit}:\n'
+        if unit.get_date_collect() != '0':
+            status = status + 'Скомплектован: '+ dt.datetime.strftime(
+                dt.datetime.strptime(unit.get_date_collect(), '%d-%m-%y-%H-%M'),
+                '%d.%m.%y %H:%M'
+            ) + f'\n'
+        if unit.get_date_assembly() != '0':
+            status = status + 'Собран: ' + dt.datetime.strftime(
+                dt.datetime.strptime(unit.get_date_assembly(), '%d-%m-%y-%H-%M'),
+                '%d.%m.%y %H:%M'
+            ) + f'\n'
+        if unit.get_date_test() != '0':
+            status = status + 'Испытан: '+ dt.datetime.strftime(
+                dt.datetime.strptime(unit.get_date_test(), '%d-%m-%y-%H-%M'),
+                '%d.%m.%y %H:%M'
+            ) + f'\n'
+        bot.edit_message_text(chat_id=call.message.chat.id,
+                              message_id=call.message.message_id,
+                              text=status,
                               reply_markup=keyboard)
 
     # Выгрузка фотографий узла
@@ -264,7 +290,7 @@ def answer(call):
         keyboard.add(butt_back)
         bot.send_message(chat_id=call.message.chat.id,
                          text=
-                         f'Загружены фото контроля сбоки {unit}',
+                         f'Загрузка фото {unit} завершена. Что бы продолжить нажмите Главное меню',
                          reply_markup=keyboard)
 
 
@@ -280,15 +306,15 @@ def get_text_messages(message):
     if new:
         new_unit = message.text.split(' ')
         if new_unit[0][0:3] == 'ЭЦН' or new_unit[0][0:3] == 'ВНН':
-            fl.add_unit(Unit(1, 'ecn', new_unit[0], int(new_unit[1]), 0, list()))
+            fl.add_unit(Unit(1, 'ecn', new_unit[0], int(new_unit[1]), 0, '0', '0', '0', list()))
             bot.send_message(chat_id=message.chat.id,
                              text=f'{new_unit[0]} {new_unit[1]} поставлен на сборку')
         elif new_unit[0][0:3] == 'ПЭД' or new_unit[0][0:3] == 'ПВЭ':
-            fl.add_unit(Unit(1, 'ped', new_unit[0], int(new_unit[1]), 0, list()))
+            fl.add_unit(Unit(1, 'ped', new_unit[0], int(new_unit[1]), 0, '0', '0', '0', list()))
             bot.send_message(chat_id=message.chat.id,
                              text=f'{new_unit[0]} {new_unit[1]} поставлен на сборку')
         elif new_unit[0][0:2] == 'ГЗ':
-            fl.add_unit(Unit(1, 'gz', new_unit[0], int(new_unit[1]), 0, list()))
+            fl.add_unit(Unit(1, 'gz', new_unit[0], int(new_unit[1]), 0, '0', '0', '0', list()))
             bot.send_message(chat_id=message.chat.id,
                              text=f'{new_unit[0]} {new_unit[1]} поставлен на сборку')
         else:
@@ -301,7 +327,7 @@ def get_text_messages(message):
     elif message.text == 'Name':
         bot.send_message(message.from_user.id, f'Your ID: {message.from_user.first_name}')
     elif message.text == 'Главное меню':
-        save_data('bd.txt', fl)
+        save_data('bd_flow.txt', fl)
         upload = False
         new = False
         key = types.InlineKeyboardMarkup(row_width=1)

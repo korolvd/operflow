@@ -25,13 +25,16 @@ class User:
 
 
 class Unit:
-    def __init__(self, id, type, name, number, status, images):
+    def __init__(self, id, type, name, number, status, date_collect, date_assembly, date_test, images):
         self.__id = id
         self.__name = name
         self.__number = number
         self.__status = status
         self.__type = type
         self.__images = images
+        self.__date_collect = date_collect
+        self.__date_assembly = date_assembly
+        self.__date_test = date_test
 
     def get_id(self):
         return self.__id
@@ -71,6 +74,24 @@ class Unit:
 
     def add_image(self, image):
         self.__images.append(image)
+
+    def get_date_collect(self):
+        return self.__date_collect
+
+    def set_date_collect(self, date_collect):
+        self.__date_collect = date_collect
+
+    def get_date_assembly(self):
+        return self.__date_assembly
+
+    def set_date_assembly(self, date_assembly):
+        self.__date_assembly = date_assembly
+
+    def get_date_test(self):
+        return self.__date_test
+
+    def set_date_test(self, date_test):
+        self.__date_test = date_test
 
     def __str__(self) -> str:
         return f'{self.__name} №{self.__number}'
